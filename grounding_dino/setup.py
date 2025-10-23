@@ -96,7 +96,8 @@ def get_extensions():
             "-gencode=arch=compute_75,code=sm_75",
             "-gencode=arch=compute_80,code=sm_80",
             "-gencode=arch=compute_86,code=sm_86",
-            "-gencode=arch=compute_120,code=sm_120"
+            "-gencode=arch=compute_87,code=sm_87" # Added for Jetson Orin
+            # "-gencode=arch=compute_120,code=sm_120" # Commented out as it breaks Jetson Orin
         ]
     else:
         print("Compiling without CUDA")
