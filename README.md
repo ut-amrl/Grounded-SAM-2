@@ -1,3 +1,120 @@
+# Update Oct 2025: ROS 2 Support
+Clone the repo to `<colcon_ws>/src` and set up the repo following the original README. Build the package by running the following under `<colcon_ws>`:
+```bash
+colcon build --symlink-install --packages-select ros2_gsam2
+```
+Source:
+```bash
+source install/setup.bash
+```
+
+To start the GSAM2 service (see `ros2_gsam2/launch/gsam2_server.launch.py` for additional launch arguments):
+```bash
+ros2 launch ros2_gsam2 gsam2_server.launch.py
+```
+
+Example Testing Client:
+```python
+#!/usr/bin/env python3
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import Image as ImageMsg
+from cv_bridge import CvBridge
+from amrl_msgs.srv import GroundedSAM2Srv
+from pathlib import Path
+import numpy as np
+import cv2, json, base64
+import pycocotools.mask as mask_util
+
+
+class GSAM2Client(Node):
+    def __init__(self):
+        super().__init__("gsam2_test_client")
+        self.cli = self.create_client(GroundedSAM2Srv, "gsam2/infer")
+        while not self.cli.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info("Waiting for /gsam2/infer service...")
+        self.bridge = CvBridge()
+
+    def decode_rle(self, counts, h, w):
+        """Decode a COCO-style RLE to binary mask."""
+        rle = {"counts": counts.encode("utf-8"), "size": [h, w]}
+        mask = mask_util.decode(rle)
+        return mask.astype(bool)
+
+    def visualize_and_save(self, img_path, resp, save_path):
+        img = cv2.imread(img_path)
+        if img is None:
+            self.get_logger().error(f"Failed to read {img_path}")
+            return
+
+        overlay = img.copy()
+        n = resp.n
+        colors = [tuple(np.random.randint(0, 255, 3).tolist()) for _ in range(n)]
+
+        for i in range(n):
+            x1, y1, x2, y2 = int(resp.x_min[i]), int(resp.y_min[i]), int(resp.x_max[i]), int(resp.y_max[i])
+            label = f"{resp.class_name[i]} {resp.score[i]:.2f}"
+
+            # Draw bounding box
+            color = colors[i]
+            cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(img, label, (x1, max(20, y1 - 5)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+            # Decode and visualize mask if available
+            if i < len(resp.rle_counts) and resp.rle_counts[i]:
+                mask = self.decode_rle(resp.rle_counts[i], resp.rle_height[i], resp.rle_width[i])
+                color_mask = np.zeros_like(img, dtype=np.uint8)
+                color_mask[mask] = color
+                overlay = cv2.addWeighted(overlay, 1.0, color_mask, 0.5, 0)
+
+        blended = cv2.addWeighted(img, 0.7, overlay, 0.3, 0)
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(save_path, blended)
+        self.get_logger().info(f"Visualization saved to {save_path}")
+
+    def send_request(self, img_path, prompt, save_path):
+        req = GroundedSAM2Srv.Request()
+        req.text_prompt = prompt
+        req.image = self.bridge.cv2_to_imgmsg(cv2.imread(img_path), encoding="bgr8")
+        req.box_threshold = 0.35
+        req.text_threshold = 0.45
+        req.multimask_output = False
+
+        self.get_logger().info(f"Sending request: {prompt}")
+        future = self.cli.call_async(req)
+        rclpy.spin_until_future_complete(self, future)
+        if not future.result():
+            self.get_logger().error("Service call failed.")
+            return
+
+        resp = future.result()
+        self.get_logger().info(f"Response received with {resp.n} detections")
+
+        # Save visualization
+        if resp.n > 0:
+            self.visualize_and_save(img_path, resp, save_path)
+
+def main():
+    rclpy.init()
+    node = GSAM2Client()
+
+    # ------------- CHANGE THESE -------------
+    img_path = <image path>
+    prompt = <prompt; seperated by '.'>
+    save_path = <visualization save path>
+    # ----------------------------------------
+
+    node.send_request(img_path, prompt, save_path)
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
+
+```
+
 # Grounded SAM 2: Ground and Track Anything in Videos
 
 **[IDEA-Research](https://github.com/idea-research)**
