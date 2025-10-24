@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>ros2_gsam2</name>
+  <version>0.1.0</version>
+  <description>ROS2 wrapper for GroundingDINO + SAM2 (Grounded-SAM2) inference service</description>
+  <maintainer email="taijingchen@utexas.edu">Taijing Chen</maintainer>
+  <license>MIT</license>
+
+  <!-- Core build tools -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <!-- Runtime / build dependencies -->
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>ament_index_python</depend>
+  <depend>amrl_msgs</depend>   <!-- your custom srv definitions -->
+
+  <!-- Optional visualization dependency -->
+  <exec_depend>pycocotools</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
+

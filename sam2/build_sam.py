@@ -8,7 +8,8 @@ import logging
 import os
 
 import torch
-from hydra import compose
+from hydra import compose, initialize_config_dir
+from hydra.core.global_hydra import GlobalHydra
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
@@ -67,6 +68,20 @@ HF_MODEL_ID_TO_FILENAMES = {
     ),
 }
 
+def _compose_from_file_abs(config_file_abs: str, overrides=None):
+    overrides = overrides or []
+    if not os.path.isabs(config_file_abs) or not os.path.exists(config_file_abs):
+        raise FileNotFoundError(f"Config file not found: {config_file_abs}")
+
+    cfg_dir = os.path.dirname(config_file_abs)
+    cfg_name = os.path.splitext(os.path.basename(config_file_abs))[0]
+
+    if GlobalHydra.instance().is_initialized():
+        GlobalHydra.instance().clear()
+
+    with initialize_config_dir(version_base=None, config_dir=cfg_dir):
+        cfg = compose(config_name=cfg_name, overrides=overrides)
+    return cfg
 
 def build_sam2(
     config_file,
@@ -87,7 +102,8 @@ def build_sam2(
             "++model.sam_mask_decoder_extra_args.dynamic_multimask_stability_thresh=0.98",
         ]
     # Read config and init model
-    cfg = compose(config_name=config_file, overrides=hydra_overrides_extra)
+    # cfg = compose(config_name=config_file, overrides=hydra_overrides_extra)
+    cfg = _compose_from_file_abs(config_file, overrides=hydra_overrides_extra)
     OmegaConf.resolve(cfg)
     model = instantiate(cfg.model, _recursive_=True)
     _load_checkpoint(model, ckpt_path)
